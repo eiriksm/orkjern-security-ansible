@@ -1,0 +1,72 @@
+---
+
+- hosts: all
+  vars_files:
+    - vars/secrets.yml
+  vars:
+    ubuntu_common_required_packages:
+      - screen
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - logwatch
+      - vim
+  tasks:
+    - name: Change root password
+      user: name=root password="{{ UBUNTU_COMMON_ROOT_PASSWORD }}"
+    - name: Add deploy user
+      user: name={{ ubuntu_common_deploy_user_name }} password="{{ UBUNTU_COMMON_DEPLOY_PASSWORD }}" shell=/bin/bash
+    - name: Add maint user
+      user: name={{ ubuntu_common_maint_user_name }} password="{{ UBUNTU_COMMON_MAINT_PASSWORD }}" shell=/bin/bash
+    - name: Add maint user to sudoers
+      lineinfile: dest=/etc/sudoers
+                  regexp="{{ ubuntu_common_maint_user_name }} ALL"
+                  line="{{ ubuntu_common_maint_user_name }} ALL=(ALL) ALL"
+                  state=present
+    - name: Add authorized keys for maint user
+      authorized_key: user={{ ubuntu_common_maint_user_name }}
+                      key="{{ lookup('file', item) }}"
+      with_items: "{{ ubuntu_common_maint_public_keys }}"
+    - name: Update APT package cache
+      apt: update_cache=yes cache_valid_time=3600
+    - name: Upgrade APT to the latest packages
+      apt: upgrade=safe
+    - name: Install required packages
+      apt: state=installed pkg={{ item }}
+      with_items: "{{ ubuntu_common_required_packages }}"
+    - name: Adjust APT update intervals
+      copy: src=assets/apt_periodic dest=/etc/apt/apt.conf.d/10periodic
+    - name: Setup ufw
+      ufw: state=enabled policy=deny
+    - name: Allow ssh traffic
+      ufw: rule=allow port={{ ubuntu_common_ssh_port }} proto=tcp
+    - name: Allow http traffic
+      ufw: rule=allow port=80 proto=tcp
+    - name: Allow https traffic
+      ufw: rule=allow port=443 proto=tcp
+    - name: Email log summary daily
+      lineinfile: dest=/etc/cron.daily/00logwatch
+                  regexp="^/usr/sbin/logwatch"
+                  line="/usr/sbin/logwatch --output mail --mailto {{ UBUNTU_COMMON_LOGWATCH_EMAIL }} --detail high"
+                  state=present create=yes
+    - name: Disallow password authentication
+      lineinfile: dest=/etc/ssh/sshd_config
+                  regexp="^PasswordAuthentication"
+                  line="PasswordAuthentication no"
+                  state=present
+      notify: restart ssh
+    - name: Disallow root SSH access
+      lineinfile: dest=/etc/ssh/sshd_config
+                  regexp="^PermitRootLogin"
+                  line="PermitRootLogin no"
+                  state=present
+      notify: restart ssh
+    - name: Change ssh port
+      lineinfile: dest=/etc/ssh/sshd_config
+                  regexp="^Port\s"
+                  line="Port {{ ubuntu_common_ssh_port }}"
+                  state=present
+      notify: restart ssh
+  handlers:
+    - name: restart ssh
+      service: name=ssh state=restarted
