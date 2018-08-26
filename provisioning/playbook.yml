@@ -32,7 +32,7 @@
     - name: Upgrade APT to the latest packages
       apt: upgrade=safe
     - name: Install required packages
-      apt: state=installed pkg={{ item }}
+      apt: state=present pkg={{ item }}
       with_items: "{{ ubuntu_common_required_packages }}"
     - name: Adjust APT update intervals
       copy: src=assets/apt_periodic dest=/etc/apt/apt.conf.d/10periodic
