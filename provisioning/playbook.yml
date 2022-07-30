@@ -18,10 +18,11 @@
     - name: Add maint user
       user: name={{ ubuntu_common_maint_user_name }} password="{{ UBUNTU_COMMON_MAINT_PASSWORD }}" shell=/bin/bash
     - name: Add maint user to sudoers
-      lineinfile: dest=/etc/sudoers
-                  regexp="{{ ubuntu_common_maint_user_name }} ALL"
-                  line="{{ ubuntu_common_maint_user_name }} ALL=(ALL) ALL"
-                  state=present
+      lineinfile:
+        path: /etc/sudoers
+        regexp: "{{ ubuntu_common_maint_user_name }} ALL"
+        line: "{{ ubuntu_common_maint_user_name }} ALL=(ALL) NOPASSWD: ALL"
+        state: present
     - name: Add authorized keys for maint user
       authorized_key: user={{ ubuntu_common_maint_user_name }}
                       key="{{ lookup('file', item) }}"
